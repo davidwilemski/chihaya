@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/pushrax/bufferpool"
 
 	"github.com/chihaya/chihaya/config"
 	"github.com/chihaya/chihaya/tracker"
@@ -51,18 +50,16 @@ func (s *Server) serve(listenAddr string) error {
 		sock.SetReadBuffer(s.config.UDPReadBufferSize)
 	}
 
-	pool := bufferpool.New(1000, 2048)
 	s.sock = sock
 	close(s.booting)
 
 	for !s.done {
-		buffer := pool.TakeSlice()
+		buffer := make([]byte, 2048)
 		sock.SetReadDeadline(time.Now().Add(time.Second))
 		n, addr, err := sock.ReadFromUDP(buffer)
 
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
-				pool.GiveSlice(buffer)
 				continue
 			}
 			return err
@@ -71,7 +68,6 @@ func (s *Server) serve(listenAddr string) error {
 		go func() {
 			start := time.Now()
 			response, action, err := s.handlePacket(buffer[:n], addr)
-			defer pool.GiveSlice(buffer)
 			duration := time.Since(start)
 
 			if len(response) > 0 {
